@@ -85,8 +85,14 @@ app.post('/removeproduct', async (req, res) => {
 
 // Get all products
 app.get('/allproducts', async (req, res) => {
-  let products = await Product.find({});
-  res.send(products);
+  try {
+    let products = await Product.find({});
+    console.log("All Products Fetched");
+    res.send(products);
+  } catch (error) {
+    console.error("Error fetching all products:", error);  // ✅ Add this line
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // User schema & model
