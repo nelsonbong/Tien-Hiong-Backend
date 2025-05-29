@@ -14,8 +14,16 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
 
 // Middleware
 app.use(express.json());
+
+// ✅ Correct CORS config
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
 }));
 
@@ -29,10 +37,15 @@ app.get("/", (req, res) => {
   res.send("Express App is Running");
 });
 
-// Serve images
+// Health check route (optional)
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", environment: process.env.NODE_ENV || "development" });
+});
+
+// Serve uploaded images
 app.use('/images', express.static('upload/images'));
 
-// Image upload config
+// Image upload configuration
 const storage = multer.diskStorage({
   destination: './upload/images',
   filename: (req, file, cb) => {
@@ -49,7 +62,7 @@ app.post("/upload", upload.single('product'), (req, res) => {
   });
 });
 
-// Product schema & model
+// Product model
 const Product = mongoose.model("Product", {
   id: { type: Number, required: true },
   name: { type: String, required: true },
@@ -90,12 +103,12 @@ app.get('/allproducts', async (req, res) => {
     console.log("All Products Fetched");
     res.send(products);
   } catch (error) {
-    console.error("Error fetching all products:", error);  // ✅ Add this line
+    console.error("Error fetching all products:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// User schema & model
+// User model
 const Users = mongoose.model("Users", {
   name: String,
   email: { type: String, unique: true },
@@ -139,20 +152,20 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// New collections
+// Get new collections
 app.get('/newcollections', async (req, res) => {
   let products = await Product.find({});
   let newcollections = products.slice(-8);
   res.json(newcollections);
 });
 
-// Popular products
+// Get popular products
 app.get('/popularproducts', async (req, res) => {
   let products = await Product.find({ category: "tea" });
   res.json(products.slice(0, 4));
 });
 
-// Middleware: fetch user
+// Middleware to fetch user
 const fetchUser = async (req, res, next) => {
   const token = req.header('auth-token');
   if (!token) return res.status(401).send({ errors: "Please authenticate using a valid token" });
@@ -189,7 +202,7 @@ app.post('/getcart', fetchUser, async (req, res) => {
   res.json(userData.cartData);
 });
 
-// Start server
+// Start the server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
