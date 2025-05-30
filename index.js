@@ -10,7 +10,12 @@ const cors = require("cors");
 // Environment variables
 const port = process.env.PORT || 4000;
 const mongoUri = process.env.MONGO_URI;
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(origin => origin.trim()) || [];
+let allowedOrigins = [];
+if (process.env.ALLOWED_ORIGINS) {
+  allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
+} else {
+  console.warn("⚠️ No ALLOWED_ORIGINS set in environment. All CORS requests will be blocked.");
+}
 
 // Middleware
 app.use(express.json());
@@ -21,7 +26,7 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.error("Blocked by CORS:", origin);
+      console.error("❌ Blocked by CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
