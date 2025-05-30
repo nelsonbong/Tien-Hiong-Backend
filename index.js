@@ -6,10 +6,13 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const cors = require("cors");
+const fs = require("fs");
 
 // Environment variables
 const port = process.env.PORT || 4000;
 const mongoUri = process.env.MONGO_URI;
+
+// CORS configuration
 let allowedOrigins = [];
 if (process.env.ALLOWED_ORIGINS) {
   allowedOrigins = process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
@@ -17,18 +20,9 @@ if (process.env.ALLOWED_ORIGINS) {
   console.warn("⚠️ No ALLOWED_ORIGINS set in environment. All CORS requests will be blocked.");
 }
 
-// Middleware
-app.use(express.json());
-
-// ✅ Correct CORS config
-import cors from "cors";
-
-const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",");
-
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman)
-    if (!origin) return callback(null, true);
+    if (!origin) return callback(null, true); // allow Postman, mobile apps
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
@@ -37,6 +31,15 @@ app.use(cors({
   },
   credentials: true
 }));
+
+app.use(express.json());
+
+// Ensure upload directory exists
+const uploadDir = path.join(__dirname, 'upload/images');
+fs.mkdirSync(uploadDir, { recursive: true });
+
+// ✅ Serve images from upload/images
+app.use('/images', express.static(uploadDir));
 
 // Connect to MongoDB
 mongoose.connect(mongoUri)
@@ -48,17 +51,14 @@ app.get("/", (req, res) => {
   res.send("Express App is Running");
 });
 
-// Health check route
+// Health check
 app.get("/health", (req, res) => {
   res.json({ status: "OK", environment: process.env.NODE_ENV || "development" });
 });
 
-// Serve uploaded images
-app.use('/images', express.static('upload/images'));
-
-// Image upload configuration
+// Multer config
 const storage = multer.diskStorage({
-  destination: './upload/images',
+  destination: uploadDir,
   filename: (req, file, cb) => {
     cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`);
   }
@@ -73,7 +73,7 @@ app.post("/upload", upload.single('product'), (req, res) => {
   });
 });
 
-// Product model
+// Product schema
 const Product = mongoose.model("Product", {
   id: { type: Number, required: true },
   name: { type: String, required: true },
@@ -163,20 +163,20 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Get new collections
+// New collections
 app.get('/newcollections', async (req, res) => {
   let products = await Product.find({});
   let newcollections = products.slice(-8);
   res.json(newcollections);
 });
 
-// Get popular products
+// Popular products
 app.get('/popularproducts', async (req, res) => {
   let products = await Product.find({ category: "tea" });
   res.json(products.slice(0, 4));
 });
 
-// Middleware to fetch user
+// Middleware: fetch user from token
 const fetchUser = async (req, res, next) => {
   const token = req.header('auth-token');
   if (!token) return res.status(401).send({ errors: "Please authenticate using a valid token" });
@@ -213,7 +213,7 @@ app.post('/getcart', fetchUser, async (req, res) => {
   res.json(userData.cartData);
 });
 
-// Start the server
+// Start server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
