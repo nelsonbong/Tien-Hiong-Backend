@@ -1,22 +1,22 @@
 require("dotenv").config();
 const express = require("express");
-const app = express();
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const cors = require("cors");
 
+const app = express();
+
 // Environment variables
 const port = process.env.PORT || 4000;
 const mongoUri = process.env.MONGO_URI;
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [];
 
-// Middleware
-app.use(express.json());
-
-// ✅ Correct CORS config
-app.use(cors({
+// CORS configuration
+const corsOptions = {
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -25,27 +25,28 @@ app.use(cors({
     }
   },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
 
-// Connect to MongoDB
+// Middleware
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // ✅ Explicitly handle preflight OPTIONS requests
+app.use(express.json());
+
+// MongoDB connection
 mongoose.connect(mongoUri)
   .then(() => console.log("Connected to MongoDB"))
   .catch(err => console.error("MongoDB connection error:", err));
 
-// Default route
-app.get("/", (req, res) => {
-  res.send("Express App is Running");
-});
+// Default routes
+app.get("/", (req, res) => res.send("Express App is Running"));
+app.get("/health", (req, res) => res.json({ status: "OK", environment: process.env.NODE_ENV || "development" }));
 
-// Health check route (optional)
-app.get("/health", (req, res) => {
-  res.json({ status: "OK", environment: process.env.NODE_ENV || "development" });
-});
-
-// Serve uploaded images
+// Static file serving
 app.use('/images', express.static('upload/images'));
 
-// Image upload configuration
+// Image upload config
 const storage = multer.diskStorage({
   destination: './upload/images',
   filename: (req, file, cb) => {
@@ -54,7 +55,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Image upload endpoint
 app.post("/upload", upload.single('product'), (req, res) => {
   res.json({
     success: 1,
@@ -74,7 +74,7 @@ const Product = mongoose.model("Product", {
   available: { type: Boolean, default: true }
 });
 
-// Add product
+// Product routes
 app.post('/addproduct', async (req, res) => {
   let products = await Product.find({});
   let id = products.length > 0 ? products[products.length - 1].id + 1 : 1;
@@ -90,13 +90,11 @@ app.post('/addproduct', async (req, res) => {
   res.json({ success: true, name: req.body.name });
 });
 
-// Delete product
 app.post('/removeproduct', async (req, res) => {
   await Product.findOneAndDelete({ id: req.body.id });
   res.json({ success: true, name: req.body.name });
 });
 
-// Get all products
 app.get('/allproducts', async (req, res) => {
   try {
     let products = await Product.find({});
@@ -117,7 +115,7 @@ const Users = mongoose.model("Users", {
   date: { type: Date, default: Date.now }
 });
 
-// Signup
+// User auth routes
 app.post('/signup', async (req, res) => {
   let check = await Users.findOne({ email: req.body.email });
   if (check) {
@@ -140,7 +138,6 @@ app.post('/signup', async (req, res) => {
   res.json({ success: true, token });
 });
 
-// Login
 app.post('/login', async (req, res) => {
   let user = await Users.findOne({ email: req.body.email });
   if (user && req.body.password === user.password) {
@@ -152,20 +149,19 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Get new collections
+// Product listings
 app.get('/newcollections', async (req, res) => {
   let products = await Product.find({});
   let newcollections = products.slice(-8);
   res.json(newcollections);
 });
 
-// Get popular products
 app.get('/popularproducts', async (req, res) => {
   let products = await Product.find({ category: "tea" });
   res.json(products.slice(0, 4));
 });
 
-// Middleware to fetch user
+// Auth middleware
 const fetchUser = async (req, res, next) => {
   const token = req.header('auth-token');
   if (!token) return res.status(401).send({ errors: "Please authenticate using a valid token" });
@@ -179,7 +175,7 @@ const fetchUser = async (req, res, next) => {
   }
 };
 
-// Add to cart
+// Cart routes
 app.post('/addtocart', fetchUser, async (req, res) => {
   let userData = await Users.findOne({ _id: req.user.id });
   userData.cartData[req.body.itemId] += 1;
@@ -187,7 +183,6 @@ app.post('/addtocart', fetchUser, async (req, res) => {
   res.json({ success: true, message: "Added to cart" });
 });
 
-// Remove from cart
 app.post('/removefromcart', fetchUser, async (req, res) => {
   let userData = await Users.findOne({ _id: req.user.id });
   if (userData.cartData[req.body.itemId] > 0)
@@ -196,13 +191,12 @@ app.post('/removefromcart', fetchUser, async (req, res) => {
   res.json({ success: true, message: "Removed from cart" });
 });
 
-// Get cart data
 app.post('/getcart', fetchUser, async (req, res) => {
   let userData = await Users.findOne({ _id: req.user.id });
   res.json(userData.cartData);
 });
 
-// Start the server
+// Start server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
