@@ -21,16 +21,21 @@ if (process.env.ALLOWED_ORIGINS) {
 app.use(express.json());
 
 // ✅ Correct CORS config
+import cors from "cors";
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",");
+
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
+    // Allow requests with no origin (like mobile apps, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     } else {
-      console.error("❌ Blocked by CORS:", origin);
-      callback(new Error("Not allowed by CORS"));
+      return callback(new Error("Not allowed by CORS"));
     }
   },
-  credentials: true,
+  credentials: true
 }));
 
 // Connect to MongoDB
