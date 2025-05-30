@@ -4,13 +4,31 @@ const app = express();
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
-const path = require("path");
 const cors = require("cors");
-const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
 
 // Environment variables
 const port = process.env.PORT || 4000;
 const mongoUri = process.env.MONGO_URI;
+
+// Cloudinary configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Multer + Cloudinary storage config
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'products',
+    allowed_formats: ['jpg', 'jpeg', 'png'],
+    public_id: (req, file) => `product_${Date.now()}`,
+  },
+});
+const upload = multer({ storage });
 
 // CORS configuration
 let allowedOrigins = [];
@@ -22,7 +40,7 @@ if (process.env.ALLOWED_ORIGINS) {
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // allow Postman, mobile apps
+    if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     } else {
@@ -33,13 +51,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, 'upload/images');
-fs.mkdirSync(uploadDir, { recursive: true });
-
-// ✅ Serve images from upload/images
-app.use('/images', express.static(uploadDir));
 
 // Connect to MongoDB
 mongoose.connect(mongoUri)
@@ -56,20 +67,11 @@ app.get("/health", (req, res) => {
   res.json({ status: "OK", environment: process.env.NODE_ENV || "development" });
 });
 
-// Multer config
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req, file, cb) => {
-    cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`);
-  }
-});
-const upload = multer({ storage });
-
-// Image upload endpoint
+// ✅ Cloudinary image upload endpoint
 app.post("/upload", upload.single('product'), (req, res) => {
   res.json({
     success: 1,
-    image_url: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
+    image_url: req.file.path, // Cloudinary URL
   });
 });
 
