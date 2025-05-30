@@ -10,7 +10,7 @@ const cors = require("cors");
 // Environment variables
 const port = process.env.PORT || 4000;
 const mongoUri = process.env.MONGO_URI;
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(origin => origin.trim()) || [];
 
 // Middleware
 app.use(express.json());
@@ -21,6 +21,7 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.error("Blocked by CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -37,7 +38,7 @@ app.get("/", (req, res) => {
   res.send("Express App is Running");
 });
 
-// Health check route (optional)
+// Health check route
 app.get("/health", (req, res) => {
   res.json({ status: "OK", environment: process.env.NODE_ENV || "development" });
 });
@@ -49,7 +50,7 @@ app.use('/images', express.static('upload/images'));
 const storage = multer.diskStorage({
   destination: './upload/images',
   filename: (req, file, cb) => {
-    cb(null, ${file.fieldname}_${Date.now()}${path.extname(file.originalname)});
+    cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`);
   }
 });
 const upload = multer({ storage });
@@ -58,7 +59,7 @@ const upload = multer({ storage });
 app.post("/upload", upload.single('product'), (req, res) => {
   res.json({
     success: 1,
-    image_url: ${req.protocol}://${req.get('host')}/images/${req.file.filename}
+    image_url: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
   });
 });
 
@@ -204,5 +205,5 @@ app.post('/getcart', fetchUser, async (req, res) => {
 
 // Start the server
 app.listen(port, () => {
-  console.log(Server running on port ${port});
+  console.log(`Server running on port ${port}`);
 });
